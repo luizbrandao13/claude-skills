@@ -19,7 +19,7 @@ Sonnet 5's effort defaults to `high`. Anthropic's cross-model mapping: **Sonnet 
 - **`low`** — short, mechanical, latency-sensitive tasks that are not intelligence-sensitive (extraction, reformatting, checklist verification).
 - **`high`/`xhigh`** — only when the subtask itself is genuinely hard; at that point question whether it should be delegated to Sonnet at all (§1).
 
-Sonnet 5 **respects effort strictly**, especially at the low end: at `low`/`medium` it scopes work to exactly what was asked rather than going above and beyond. That's the cost win — but it means under-specified briefs fail quietly. If you see shallow reasoning on a complex task, **raise effort rather than prompting around it**; if you must stay at `low` for latency, add: "This task involves multi-step reasoning. Think carefully through the problem before responding."
+Sonnet 5 **respects effort strictly**, especially at the low end: at `low`/`medium` it scopes work to exactly what was asked rather than going above and beyond. That's the cost win — but it means under-specified briefs fail quietly. If you see shallow reasoning on a complex task, **raise effort rather than prompting around it**; if you must stay at `low` for latency, add: "This task involves multistep reasoning. Think carefully through the problem before responding."
 
 Where to set it: the Workflow tool's `agent(prompt, {model: 'sonnet', effort: 'medium'})`; on the API, `output_config: {effort: "..."}` with `thinking: {type: "adaptive"}`. (The interactive Agent tool takes `model` but not `effort` — there, the brief and output constraints below are your levers.)
 
@@ -43,7 +43,7 @@ Sonnet 5 follows instructions **literally**, especially at lower effort: it won'
 
 ## 5. Thinking and API parameters
 
-- Adaptive thinking is **on by default** (a change from Sonnet 4.6). For mechanical workloads, prefer lowering effort over disabling thinking — with thinking off, Sonnet 5 reaches for tools less, so tool-dependent tasks degrade. If it over-thinks on simple calls (common with large system prompts), steer: *"Thinking adds latency and should only be used when it will meaningfully improve answer quality, typically for problems that require multi-step reasoning. When in doubt, respond directly."*
+- Adaptive thinking is **on by default** (a change from Sonnet 4.6). For mechanical workloads, prefer lowering effort over disabling thinking — with thinking off, Sonnet 5 reaches for tools less, so tool-dependent tasks degrade. If it over-thinks on simple calls (common with large system prompts), steer: *"Thinking adds latency and should only be used when it will meaningfully improve answer quality, typically for problems that require multistep reasoning. When in doubt, respond directly."*
 - `max_tokens` is a hard cap on thinking **plus** response; too tight at `high`+ yields all-thinking-then-truncation. The new tokenizer's ~30% inflation means limits tuned for Sonnet 4.6 may truncate — leave headroom, and use `max_tokens` (not prompts) as the hard cost ceiling.
 - `temperature`/`top_p`/`top_k` return a 400 error on Sonnet 5 — remove them; steer variety via the prompt.
 - Manual extended thinking (`budget_tokens`) is removed — adaptive thinking + effort replaces it.
@@ -68,5 +68,6 @@ Don't down-tier effort on: tasks whose failure you can't cheaply detect, verific
 ## Sources
 
 - Prompting Claude Sonnet 5 — https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5 (effort mapping, strict effort compliance, thinking defaults and steering snippets, tokenizer +30%, sampling-params removal, interactive-coding token-efficiency guidance)
+- Re-verified against the live docs 2026-08-05: every lever above unchanged. Sonnet 4.6 now sits in Anthropic's legacy models table — the Sonnet 5 ↔ 4.6 effort equivalence remains the docs' own current framing.
 - Prompting best practices — https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices (long-context placement, output-format control, subagent guidance)
 - Companion: the `fable-mode` skill §3 handles *when* to delegate and to which tier; this skill handles *how cheaply* the Sonnet leg runs.

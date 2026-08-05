@@ -1,6 +1,6 @@
 ---
 name: fable-mode
-description: Make Claude Opus 4.8 work with Claude Fable 5's operating discipline — spec-first execution, aggressive tool/subagent use, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. Use when the session runs on Opus 4.8 (or any non-Fable model) and the task is substantial — multi-step coding, long-horizon agentic work, large refactors, audits, deep research, overnight runs. Trigger on /fable-mode or phrases like "fable mode", "work like fable", "maximum quality mode". Do NOT apply to trivial questions or single small edits — the ceremony would cost more than it buys.
+description: Makes Claude Opus 4.8, Claude Opus 5, or any non-Fable model work with Claude Fable 5's operating discipline — spec-first execution, per-model tool/subagent calibration, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. Use when the session runs on a non-Fable model and the task is substantial — multi-step coding, long-horizon agentic work, large refactors, audits, deep research, overnight runs. Trigger on /fable-mode or phrases like "fable mode", "work like fable", "maximum quality mode". Do NOT apply to trivial questions or single small edits — the ceremony would cost more than it buys.
 ---
 
 # Fable Mode — Fable 5's discipline on Opus 4.8
@@ -13,18 +13,32 @@ You are running on a model that is not Claude Fable 5. This skill closes the **p
 
 Opus 4.8's documented defaults that this skill must actively counteract:
 - It **favors reasoning over tool calls** — it answers from context when it should search, read, or run something.
-- It **spawns fewer subagents** than optimal and under-uses file-based memory and custom tools unless told *when* to reach for them.
+- It **spawns fewer subagents** than optimal unless told *when* to reach for them.
 - It is **more deliberate and asks more often** — pausing on minor decisions it should just make.
 - It follows instructions **literally** — which is why the explicit triggers below work reliably.
 
 Fable 5's documented disciplines that this skill installs: spec-first autonomy, self-verification with fresh-context subagents, evidence-audited progress claims, a memory surface, parallel delegation, and re-grounding communication.
 
+## Model calibration — identify the model, then set each lever
+
+This protocol was originally tuned against Opus 4.8. **Claude Opus 5 reverses several of those defaults** (Opus 4.8 now sits in Anthropic's legacy models table) — applying the 4.8 counteractions on Opus 5 is actively counterproductive. Check which model the session runs on, then:
+
+| Lever | On Opus 4.8 | On Opus 5 |
+|---|---|---|
+| Delegation (§3) | **Push** — it under-delegates by default | **Cap** — it "delegates to subagents more readily than prior models"; give explicit criteria for which scenarios warrant delegation and skip it for small tasks |
+| Verification (§4) | **Install the full harness** | **Keep the standard, drop the ceremony** — Opus 5 "verifies its own work without being told to"; explicit verification scaffolding causes over-verification. Keep the failable-check standard and grounded claims (§5); drop the scheduled cadence and default-on verifier subagents, reserving fresh-context verifiers for the final deliverable or high-stakes steps |
+| Thinking (§0) | OFF unless `{type: "adaptive"}` is set | Adaptive **by default**; `disabled` combined with `xhigh`/`max` effort returns a 400 error |
+| Effort (§0) | `xhigh` best for coding/agentic | Start at the default `high`; step to `xhigh` only for genuinely demanding work; use `low`/`medium` liberally where quality holds |
+| Verbosity (§11) | Narrates more than 4.7 | Longer default responses and written files; effort controls thinking volume, not visible output length — constrain length explicitly in the prompt |
+
+§1 (spec-first), §2 (investigate, parallel calls), and §5–§11 apply unchanged to both models — and to any other non-Fable model, defaulting to the Opus 5 column for post-4.8 models.
+
 ---
 
 ## 0. Setup
 
-- **Effort:** this protocol assumes high reasoning effort. If effort is user-controllable in this harness and set below `xhigh` for a hard task, tell the user once: coding/agentic work performs best at `xhigh` (Anthropic's own recommendation for Opus 4.8); `max` for correctness-over-cost work.
-- **Thinking:** if you control the API call, `thinking: {type: "adaptive"}` — on Opus 4.8 thinking is OFF when the field is omitted. Give `max_tokens` ≥ 64k headroom at `xhigh`/`max`.
+- **Effort:** this protocol assumes high reasoning effort. If effort is user-controllable in this harness: on Opus 4.8, coding/agentic work performs best at `xhigh` (Anthropic's own recommendation), `max` for correctness-over-cost work — tell the user once if it's set lower for a hard task. On Opus 5, start at the default `high` and escalate to `xhigh` only for genuinely demanding work; `max` risks overthinking on both.
+- **Thinking:** if you control the API call — Opus 4.8 has thinking OFF when the field is omitted; set `thinking: {type: "adaptive"}`. Opus 5 runs adaptive thinking by default, and `disabled` with `xhigh`/`max` effort returns a 400. Give `max_tokens` ≥ 64k headroom at `xhigh`/`max`.
 - Confirm a memory surface exists (§6). If the harness provides one (memory directory, MEMORY.md), use it; otherwise create `notes/lessons/` or a single `LESSONS.md` in the project scratch area.
 
 ## 1. Specification first — one round, then autonomy
@@ -46,7 +60,7 @@ Counteract the reason-over-tools default with explicit triggers:
 
 ## 3. Delegate — parallel, and asynchronously where the harness allows
 
-Opus 4.8 under-delegates by default. Explicit triggers:
+Opus 4.8 under-delegates by default. (Opus 5 reverses this — see Model calibration: give criteria and caps instead of a push; the per-item triggers below still describe *which* work fans out.) Explicit triggers:
 
 - **Spawn subagents** when work fans out across independent items — many files to read, many candidates to check, many tests to run, independent workstreams. Spawn them in the same turn so they run in parallel.
 - **Do not spawn** a subagent for work you can complete directly in a single response (a function you can already see, a single grep, sequential steps that share state).
@@ -56,7 +70,7 @@ Opus 4.8 under-delegates by default. Explicit triggers:
 
 ## 4. Self-verification harness — fresh eyes, on a cadence
 
-Fable at high effort "reflects on and validates its own work." Install that explicitly:
+Fable at high effort "reflects on and validates its own work." Install that explicitly. (Opus 5 exception — see Model calibration: it self-verifies unprompted and explicit verification scaffolding causes over-verification; on Opus 5 keep the failable-check standard and domain anchors below, but skip the scheduled cadence and default-on verifier subagents.)
 
 - At the start of a long build, **establish a method for checking your own work** — tests, a runnable repro, a checklist against the spec — and run it at a regular interval as you build, not only at the end.
 - **Every check must be failable and name an external artifact.** A pass condition is: a test command that runs and passes, a file that provably exists in the expected shape, a source actually fetched and read in this run, an output diffed against the spec. "I reviewed it and it looks right" is not a check — introspection is not an artifact, and a model that would skip verification will also pass its own inspection. "Verified" without a named command, file, or comparison is a violation. If a step genuinely has no failable check, say so and mark its output **unverified** so the gap is visible downstream. If a later fix invalidates earlier verified work, re-run that earlier check before continuing.
@@ -120,4 +134,4 @@ Trivial questions, single small edits, quick lookups: answer directly. Applying 
 
 ---
 
-`reference.md` in this skill folder contains the verbatim Anthropic snippets these rules were adapted from, the Opus 4.8 behavioral profile, and all source URLs — consult it when adapting the protocol or when a rule needs its original wording.
+[reference.md](reference.md) in this skill folder contains the verbatim Anthropic snippets these rules were adapted from, the Opus 4.8 and Opus 5 behavioral profiles, and all source URLs — consult it when adapting the protocol or when a rule needs its original wording.

@@ -4,14 +4,14 @@ Two [Claude Code skills](https://code.claude.com/docs/en/skills) that tune how C
 
 | Skill | What it does | When it triggers |
 |---|---|---|
-| [`fable-mode`](fable-mode/SKILL.md) | Makes Claude Opus 4.8 (or any non-Fable model) operate with Claude Fable 5's working discipline — spec-first execution, aggressive tool and subagent use, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. | Substantial work: multi-step coding, long-horizon agentic tasks, large refactors, audits, deep research, overnight runs. Or explicitly via `/fable-mode`. |
+| [`fable-mode`](fable-mode/SKILL.md) | Makes Claude Opus 4.8, Claude Opus 5, or any non-Fable model operate with Claude Fable 5's working discipline — spec-first execution, per-model tool and subagent calibration, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. | Substantial work: multi-step coding, long-horizon agentic tasks, large refactors, audits, deep research, overnight runs. Or explicitly via `/fable-mode`. |
 | [`sonnet-lean`](sonnet-lean/SKILL.md) | Cuts token spend whenever work runs on Claude Sonnet 5 — as a delegated subagent/worker or as the session model — using Anthropic's documented cost levers. | Whenever tasks are delegated to Sonnet workers, or when building prompts/pipelines that call a `claude-sonnet-*` model. Or explicitly via `/sonnet-lean`. |
 
 The two compose: `fable-mode` decides *when* to delegate and to *which* model tier; `sonnet-lean` makes the Sonnet leg of that delegation run as cheaply as possible.
 
 ## Why these exist
 
-**The gap between models is partly weights, partly process.** Claude Fable 5 outperforms Opus 4.8 for two reasons: deeper raw reasoning (which no prompt can transfer) and a documented set of working disciplines — how it specs tasks, investigates before answering, delegates, verifies its own work, and reports progress. That second half is prompt-shaped. `fable-mode` installs it on Opus 4.8, explicitly counteracting Opus 4.8's documented defaults (favoring reasoning over tool calls, under-spawning subagents, under-using memory, asking too often). On well-specified work, the quality gap shrinks dramatically — at half the price. On genuinely novel, hardest-tier problems, Fable stays ahead; the skill says so rather than pretending otherwise.
+**The gap between models is partly weights, partly process.** Claude Fable 5 outperforms the Opus tier for two reasons: deeper raw reasoning (which no prompt can transfer) and a documented set of working disciplines — how it specs tasks, investigates before answering, delegates, verifies its own work, and reports progress. That second half is prompt-shaped. `fable-mode` installs it, calibrated per model: on Opus 4.8 it counteracts documented defaults (favoring reasoning over tool calls, under-spawning subagents, asking too often); on Claude Opus 5 — which reverses several of those defaults, over-delegating and self-verifying unprompted — it caps rather than pushes, per the skill's Model calibration table. On well-specified work, the quality gap shrinks dramatically — at half the price. On genuinely novel, hardest-tier problems, Fable stays ahead; the skill says so rather than pretending otherwise.
 
 **Sonnet 5's defaults are tuned for capability, not cost.** Effort defaults to `high`, adaptive thinking is on by default, and its tokenizer produces ~30% more tokens for the same text than Sonnet 4.6. Anthropic's own cross-model mapping says Sonnet 5 at `medium` effort matches Sonnet 4.6 at `high` — so most delegated worker tasks are silently overpaying. `sonnet-lean` sets each lever deliberately: effort down-mapping, one-shot complete briefs (drip-fed instructions measurably waste tokens), structured output constraints, and thinking-trigger steering.
 
@@ -87,7 +87,7 @@ examples minimal.
 
 ## Design principles
 
-1. **Every rule cites a source.** `fable-mode/reference.md` preserves the verbatim Anthropic snippets and URLs each rule was derived from, so the skill can be re-derived or re-tuned when the docs change. `sonnet-lean` lists its sources inline.
+1. **Every rule cites a source.** `fable-mode/reference.md` preserves the verbatim Anthropic snippets and URLs each rule was derived from, so the skill can be re-derived or re-tuned when the docs change. `sonnet-lean` lists its sources inline. Sources were last re-verified against the live docs on 2026-08-05; claims that have since disappeared from the docs are marked as historical in `reference.md` rather than silently kept.
 2. **Checks must be able to fail.** Verification names an external artifact — a test command that ran, a file that provably exists, a source fetched in this run, a diff against spec. "I reviewed it and it looks right" doesn't count.
 3. **Honest about limits.** A skill shapes procedure, not capability. Neither skill claims to make a model smarter — only to stop it from leaving documented performance or savings on the table.
 
@@ -109,6 +109,7 @@ Built on Anthropic's official documentation:
 
 - [Prompting Claude Fable 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5)
 - [Prompting Claude Opus 4.8](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-4-8)
+- [Prompting Claude Opus 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5)
 - [Prompting Claude Sonnet 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5)
 - [Claude prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
 - [Migration guide](https://platform.claude.com/docs/en/about-claude/models/migration-guide)

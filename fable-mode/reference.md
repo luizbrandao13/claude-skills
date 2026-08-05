@@ -1,6 +1,6 @@
 # Fable Mode — Sources & Verbatim Snippet Library
 
-Compiled 2026-07-08 from Anthropic's official documentation. SKILL.md adapts these; this file preserves the originals word-for-word so the protocol can be re-derived or re-tuned when the docs change.
+Compiled 2026-07-08 from Anthropic's official documentation; re-verified against the live docs 2026-08-05 (see "Re-verification 2026-08-05" below). SKILL.md adapts these; this file preserves the originals word-for-word so the protocol can be re-derived or re-tuned when the docs change.
 
 ## Sources
 
@@ -12,10 +12,32 @@ Compiled 2026-07-08 from Anthropic's official documentation. SKILL.md adapts the
 6. **Launch announcement** — https://www.anthropic.com/news/claude-fable-5-mythos-5 (benchmark/behavior deltas)
 7. **Prompting Claude Sonnet 5** — https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5 (basis for the companion `sonnet-lean` skill; effort mapping, verbosity, tokenizer)
 8. **mrtooher/fable-mode** — https://github.com/mrtooher/fable-mode (community skill, unsourced; ideas adopted 2026-07-09 listed below)
+9. **Prompting Claude Opus 5** — https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 (added 2026-08-05; basis for the Opus 5 column of SKILL.md's Model calibration table)
+
+## Re-verification 2026-08-05
+
+All sources re-fetched and diffed against this file. Findings:
+
+- **Fable 5 page (source 1): every adopted snippet unchanged verbatim.** New sections not yet adapted into SKILL.md (deliberately — they are API-integration guidance, not working discipline): a "Create a send-to-user tool" section for verbatim mid-run delivery; a warning that show-your-thinking instructions can trigger the `reasoning_extraction` refusal category with elevated fallbacks to Opus 4.8; safety-classifier notes (offensive cyber, bio/life-sciences, thinking extraction) with fallback guidance.
+- **Opus 4.8 page (source 2): core behavioral profile unchanged** — reason-over-tools, fewer-subagents-by-default, literal instruction following, `xhigh` for coding/agentic, thinking off unless set, code-review recall trap. **No longer found in current docs:** the file-based-memory under-use note and the "~12pp ask-rate" figure (both marked historical below). The page now points forward to a "Migrating to Claude Opus 5" guide.
+- **Claude Opus 5 released** (`claude-opus-5`, $5/$25 per MTok, 1M context, 128K output, knowledge cutoff May 2026). Opus 4.8 moved to the Legacy models table; Opus 4.1 retires 2026-08-05. Opus 5 reverses several 4.8 defaults — profile below; SKILL.md gained a Model calibration table from it.
+- **Benchmark figures removed from platform docs:** the SWE-bench Pro and FrontierCode Diamond numbers in "The capability gap" below no longer appear anywhere in current platform docs; treat them as historical (launch-announcement era), not currently citable.
+- **Best-practices page (source 3): all adopted snippets unchanged.** New caveat attached to the self-check anchor: "Claude Opus 5 is the exception: it verifies its own work well without explicit instruction, and verification instructions carried over from prompts tuned for earlier models can cause over-verification… When migrating to Claude Opus 5, remove these instructions rather than rewriting them."
+
+## Opus 5 behavioral profile (source 9, added 2026-08-05)
+
+What changed relative to the Opus 4.8 profile this skill was tuned against:
+
+- **Delegation reversed:** "Claude Opus 5 delegates to subagents more readily than prior models. … it multiplies cost and time when applied to small tasks … give explicit guidance on which scenarios warrant delegation, or set deterministic caps."
+- **Self-verification built in:** "Claude Opus 5 verifies its own work without being told to. If your prompt contains explicit verification instructions … remove them: instructions like these cause over-verification." Also catches and fixes its own mistakes well without prompting.
+- **Effort reversed:** "Start with the default (`high`) and adjust based on your evals: use `low` and `medium` liberally as your primary control for token cost and response time wherever quality holds, and step up to `xhigh` for demanding coding and agentic work."
+- **Thinking reversed:** requests without a `thinking` field run with adaptive thinking (on 4.8 they run without); `thinking: {type: "disabled"}` with effort `xhigh` or `max` returns a 400 error. With thinking disabled, leaked tool-call text and internal XML tags can appear; thinking enabled at `low` effort performs better than disabled at similar cost.
+- **Unchanged from 4.8:** the code-review literalism trap ("only high-severity" → follows literally and reports less; ask for everything, filter in a separate pass).
+- **Verbosity:** default responses and written files run longer than prior Opus models; it narrates readily during agentic work; effort controls thinking volume, not visible response length — constrain length explicitly in the prompt.
 
 ## The capability gap (what a skill cannot close)
 
-- SWE-bench Pro: Fable 5 80.3% vs Opus 4.8 69.2%. FrontierCode Diamond: 29.3% vs 13.4%. The gap **widens with task complexity**.
+- SWE-bench Pro: Fable 5 80.3% vs Opus 4.8 69.2%. FrontierCode Diamond: 29.3% vs 13.4%. The gap **widens with task complexity**. *(Historical: these figures were removed from platform docs by 2026-08-05 — see Re-verification above.)*
 - Fable: "state-of-the-art on nearly all tested benchmarks"; sustains multi-day goal-directed runs; first-shot correctness on complex well-specified problems; substantially better dense-image vision; higher bug-finding recall; better at navigating ambiguity; "significantly more dependable at dispatching and sustaining parallel subagents."
 - Pricing: Fable $10/$50 per MTok; Opus 4.8 $5/$25. Both 1M context / 128K output. (Batch API = 50% off ⇒ batched Fable costs Opus sticker price.)
 - No fine-tuning/distillation exists for any Claude model; Fable never returns raw chain of thought (summarized or omitted only), so there is no distillation signal.
@@ -26,8 +48,8 @@ From source 2 and the migration guide:
 
 - "Claude Opus 4.8 has a tendency to favor reasoning over tool calls." `high`/`xhigh` effort shows substantially more tool usage. Explicit when/how instructions in prompts and tool descriptions give measurable lift.
 - "Claude Opus 4.8 tends to spawn fewer subagents by default. However, this behavior is steerable through prompting."
-- Under-reaches for file-based memory and custom tools unless triggers are explicit ("say *when* each capability applies, not just that it exists").
-- More deliberate — asks on minor decisions; autonomy guidance cut ask-rate ~12pp with no over-reach increase.
+- Under-reaches for file-based memory and custom tools unless triggers are explicit ("say *when* each capability applies, not just that it exists"). *(Historical: not found in current docs at 2026-08-05 re-verification; the memory rule in SKILL.md §6 rests on the Fable page, which is unchanged.)*
+- More deliberate — asks on minor decisions; autonomy guidance cut ask-rate ~12pp with no over-reach increase. *(Historical: the ~12pp figure no longer appears in current docs.)*
 - Interprets instructions literally, especially at lower effort. State scope explicitly.
 - Effort: `xhigh` best for coding/agentic; minimum `high` for intelligence-sensitive; `max` sometimes overthinks; at `xhigh`/`max` set max_tokens ≥ 64k.
 - Thinking is OFF when `thinking` field omitted — set `{type: "adaptive"}` explicitly.
