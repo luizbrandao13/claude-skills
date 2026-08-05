@@ -95,7 +95,7 @@ examples minimal.
 
 ```
 fable-mode/
-  SKILL.md       # the operating protocol (12 sections)
+  SKILL.md       # the operating protocol (sections 0–12)
   reference.md   # verbatim Anthropic source snippets + provenance of every rule
 sonnet-lean/
   SKILL.md       # the token-efficiency levers, with briefing template

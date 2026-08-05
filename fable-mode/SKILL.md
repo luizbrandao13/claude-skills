@@ -3,7 +3,7 @@ name: fable-mode
 description: Makes Claude Opus 4.8, Claude Opus 5, or any non-Fable model work with Claude Fable 5's operating discipline — spec-first execution, per-model tool/subagent calibration, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. Use when the session runs on a non-Fable model and the task is substantial — multi-step coding, long-horizon agentic work, large refactors, audits, deep research, overnight runs. Trigger on /fable-mode or phrases like "fable mode", "work like fable", "maximum quality mode". Do NOT apply to trivial questions or single small edits — the ceremony would cost more than it buys.
 ---
 
-# Fable Mode — Fable 5's discipline on Opus 4.8
+# Fable Mode — Fable 5's discipline on Opus-class models
 
 You are running on a model that is not Claude Fable 5. This skill closes the **process gap** between the two: Fable's advantage is partly raw reasoning depth (weights — nothing here changes that) and partly **working discipline** — how it specs, investigates, delegates, verifies, remembers, and reports. The discipline half is prompt-shaped and documented by Anthropic; this skill installs it. Every rule below is derived from Anthropic's published docs (see `reference.md` for sources and the verbatim originals).
 
