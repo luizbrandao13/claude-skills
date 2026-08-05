@@ -83,6 +83,17 @@ examples minimal.
 
 **Honest reading of those numbers.** The last row matters: per-call *total* tokens barely moved, because in a subagent call the fixed input (agent system prompt + the file both agents read) dominates. What the lean brief actually cut was the **output** — the expensive tokens (billed at a multiple of input) and the ones that compound: the orchestrator ingests the returned payload into its context and re-processes it on every subsequent turn of the parent session, so a 62% smaller return keeps paying for itself. The halved wall time is consistent with roughly proportionally fewer output tokens generated. And coverage was identical — the lean output lost nothing the task actually asked for; arm A's extra 2,900 characters were prose framing, a closing recap, and the file path restated back to the caller that already supplied it.
 
+**Replication (2026-08-05, one run per arm):** the same A/B design was re-run on a different target file (`fable-mode/reference.md`, 9 top-level sections) with the same naive-vs-template briefs, both arms on Sonnet:
+
+| Metric | A: naive | B: lean | Delta |
+|---|---|---|---|
+| Returned payload | 4,988 chars / 616 words | 989 chars / 128 words | **−80%** |
+| Wall time | 24.1 s | 8.2 s | **−66%** |
+| Coverage of the file's 9 `##` sections | 9/9 | 9/9 (verified vs. `grep -n '^## '`) | equal |
+| Total subagent tokens (input + output) | 33,429 | 32,127 | ≈ equal |
+
+Same shape as the first run — total tokens flat (fixed input dominates), output payload and wall time cut hard, coverage identical. Arm A's extra ~4,000 characters were framing, per-section line numbers nobody asked for, and a closing structural essay; arm B returned exactly the nine lines the template demanded. Two runs on two files is still a demonstration, not a benchmark — but the mechanism reproduced.
+
 **Not verified (and stated in the skill itself):** the effort down-mapping — the *biggest* documented lever — couldn't be measured here because this harness's interactive Agent tool exposes `model` but not `effort`; that claim rests on Anthropic's published Sonnet 5 ↔ Sonnet 4.6 equivalence, not on our measurement. This was also a single small task with one run per arm — enough to demonstrate the mechanism, not to promise a percentage. Treat the numbers as an existence proof; run your own eval before quoting savings.
 
 ## Design principles
