@@ -4,7 +4,7 @@ Two [Claude Code skills](https://code.claude.com/docs/en/skills) that tune how C
 
 | Skill | What it does | When it triggers |
 |---|---|---|
-| [`fable-mode`](fable-mode/SKILL.md) | Makes Claude Opus 4.8, Claude Opus 5, or any non-Fable model operate with Claude Fable 5's working discipline — spec-first execution, per-model tool and subagent calibration, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. | Substantial work: multi-step coding, long-horizon agentic tasks, large refactors, audits, deep research, overnight runs. Or explicitly via `/fable-mode`. |
+| [`fable-mode`](fable-mode/SKILL.md) | Makes Claude Opus 5 or 4.8, or any non-Fable model operate with Claude Fable 5's working discipline — spec-first execution, per-model tool and subagent calibration, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. | Substantial work: multi-step coding, long-horizon agentic tasks, large refactors, audits, deep research, overnight runs. Or explicitly via `/fable-mode`. |
 | [`sonnet-lean`](sonnet-lean/SKILL.md) | Cuts token spend whenever work runs on Claude Sonnet 5 — as a delegated subagent/worker or as the session model — using Anthropic's documented cost levers. | Whenever tasks are delegated to Sonnet workers, or when building prompts/pipelines that call a `claude-sonnet-*` model. Or explicitly via `/sonnet-lean`. |
 
 The two compose: `fable-mode` decides *when* to delegate and to *which* model tier; `sonnet-lean` makes the Sonnet leg of that delegation run as cheaply as possible.
