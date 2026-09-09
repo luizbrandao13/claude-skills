@@ -1,131 +1,243 @@
 # claude-skills
 
-Two [Claude Code skills](https://code.claude.com/docs/en/skills) that tune how Claude works, grounded in Anthropic's official prompting documentation rather than folklore:
+Two [Claude Code skills](https://code.claude.com/docs/en/skills) that make Claude cheaper and more accurate by fixing the two things most people get wrong without knowing it: **how the request is written** and **how work is handed to a smaller model**. Every rule cites the Anthropic documentation it comes from. Every claim of benefit was measured with tests the model never saw, and the benchmark is in [`bench/`](bench/) so you can rerun it. A third skill was built, measured, found useless, and retired in public; that story is at the end.
 
-| Skill | What it does | When it triggers |
-|---|---|---|
-| [`fable-mode`](fable-mode/SKILL.md) | Makes Claude Opus 4.8, Claude Opus 5, or any non-Fable model operate with Claude Fable 5's working discipline — spec-first execution, per-model tool and subagent calibration, fresh-context self-verification, grounded progress claims, memory, and calibrated autonomy. | Substantial work: multi-step coding, long-horizon agentic tasks, large refactors, audits, deep research, overnight runs. Or explicitly via `/fable-mode`. |
-| [`sonnet-lean`](sonnet-lean/SKILL.md) | Cuts token spend whenever work runs on Claude Sonnet 5 — as a delegated subagent/worker or as the session model — using Anthropic's documented cost levers. | Whenever tasks are delegated to Sonnet workers, or when building prompts/pipelines that call a `claude-sonnet-*` model. Or explicitly via `/sonnet-lean`. |
+| Skill | What it does | Measured | Use it when |
+|---|---|---|---|
+| [`prompt-master`](prompt-master/SKILL.md) | Rewrites your request into the prompt Claude works best with, shows you the rewrite with one reason per change, then does the work from the rewrite. | Sonnet 5 code review: from finding 2–4 of 11 planted bugs to 9–10, same cost. Vague "get the tests passing": stopped Claude from rewriting a test to make it pass. Did **not** save cost on Opus 5 when a complete brief carried "double-check everything". | The request is vague, written in another model's style, conflicts with the repo, or is about to be delegated. |
+| [`sonnet-lean`](sonnet-lean/SKILL.md) | Makes every piece of work that runs on Sonnet 5 cost less: route to the cheapest model that passes, batch items per worker, brief once and completely, constrain the output. | Worker payloads down 62–80% with identical coverage, three times. Batching halved total tokens. Sonnet at `low` effort matched Fable 5.1 on a real task at a fifth of the price. | Any time work goes to Sonnet: a subagent, a Workflow stage, a pipeline, or Sonnet as your session model. |
 
-The two compose: `fable-mode` decides *when* to delegate and to *which* model tier; `sonnet-lean` makes the Sonnet leg of that delegation run as cheaply as possible.
+## Why anyone needs this
 
-## Why these exist
+Two facts from Anthropic's own documentation explain almost everything in this repository.
 
-**The gap between models is partly weights, partly process.** Claude Fable 5 outperforms the Opus tier for two reasons: deeper raw reasoning (which no prompt can transfer) and a documented set of working disciplines — how it specs tasks, investigates before answering, delegates, verifies its own work, and reports progress. That second half is prompt-shaped. `fable-mode` installs it, calibrated per model: on Opus 4.8 it counteracts documented defaults (favoring reasoning over tool calls, under-spawning subagents, asking too often); on Claude Opus 5 — which reverses several of those defaults, over-delegating and self-verifying unprompted — it caps rather than pushes, per the skill's Model calibration table. On well-specified work, the quality gap shrinks dramatically — at half the price. On genuinely novel, hardest-tier problems, Fable stays ahead; the skill says so rather than pretending otherwise.
+**Current Claude models follow instructions literally.** Tell Sonnet 5 or Opus 5 to "only report critical issues" in a code review and it will investigate just as thoroughly as before, then report less; Anthropic's pages for both models say measured recall falls while the model's bug-finding ability is unchanged. Tell Opus 5 to "double-check your work" and it verifies work it was already going to verify, at your expense. Give it a numbered recipe and it follows the recipe instead of thinking. None of this is visible from the outside. The output looks fine. It is just worse than it would have been with one sentence changed.
 
-**Sonnet 5's defaults are tuned for capability, not cost.** Effort defaults to `high`, adaptive thinking is on by default, and its tokenizer produces ~30% more tokens for the same text than Sonnet 4.6. Anthropic's own cross-model mapping says Sonnet 5 at `medium` effort matches Sonnet 4.6 at `high` — so most delegated worker tasks are silently overpaying. `sonnet-lean` sets each lever deliberately: effort down-mapping, one-shot complete briefs (drip-fed instructions measurably waste tokens), structured output constraints, and thinking-trigger steering.
+**Where the tokens actually go is not where people think.** A subagent call in Claude Code carries roughly 45,000 tokens of fixed input before it does anything. Everything a worker returns is re-read by the parent on every later turn. Effort settings save thinking tokens, but on a mechanical task there are almost none to save. So the levers that matter are how many workers you spawn, what they return, and which model does the work, not the knobs most people reach for first.
+
+Both skills exist to apply those facts for you.
+
+**If you are new to prompting**, you type "fix the login bug" and `prompt-master` turns it into a brief with a goal, a definition of done, a scope, and the files that matter, then shows you what it wrote. You get a better result without learning anything first, and you learn anyway, one rewrite at a time.
+
+**If you prompt well but learned on another model**, you carry habits that hurt here: role-play preambles, "think step by step", severity filters, "be conservative", "verify everything twice". `prompt-master` strips them, tells you why, and cites the page that says so.
+
+**If you pay the bill**, `sonnet-lean` is where the savings are. Its three measured levers each stand on their own: send the work to Sonnet when Sonnet passes, send three items to one worker instead of one item to three, and make workers return the deliverable instead of an essay about it.
+
+**If you review other people's Claude output**, both skills make it more trustworthy: `prompt-master` insists on checkable done-criteria and on following the spec over a convenient test, and it reports assumptions as numbered items rather than burying them.
+
+## prompt-master: how it works
+
+The skill runs at the start of a task, before any work. Six steps.
+
+1. **Decide in ten seconds.** A request that already states its goal, its done-criteria and its scope is left alone. A one-line edit is left alone. A question is answered. Everything else, and anything containing an instruction from the strip-list below, is rewritten.
+2. **Investigate before rewriting.** The skill never rewrites from the words alone. It reads what the request points at, in parallel: the README or spec, the tests, the failing command, the named files. It establishes the **source of truth** and its order (a written spec outranks tests, tests outrank the current code, code outranks assumptions) and notes every place two of them disagree.
+3. **Apply the rewrite rules.** Nine rules, each tied to the Anthropic guidance it comes from:
+   - **R1** the goal with its reason, because Claude performs better when it knows why;
+   - **R2** done-criteria that can fail: a command that exits 0, a file in a given shape, every rule in the spec covered;
+   - **R3** scope stated explicitly, because Claude does not generalize an instruction from one item to the rest;
+   - **R4** assessment or change, because a problem described out loud is not a request to fix it;
+   - **R5** context as facts and `@file` references, long material first and the ask last;
+   - **R6** the source of truth named, conflicts surfaced, never silently resolved by editing the weaker artifact;
+   - **R7** the deliverable's exact shape;
+   - **R8** the strip-list (next section);
+   - **R9** ask once, at most three questions in one batch, or assume and number the assumption.
+4. **Check the Claude Code mechanics** the user didn't use: plan mode for a multi-file change, `@file` instead of describing a file, a model and effort matched to the task, a subagent when work fans out.
+5. **Show the rewrite.** Original prompt, rewritten prompt, and a one-line "what changed and why" per change. In an interactive session this appears before any work starts; in an unattended run it heads the final report.
+6. **Execute the rewrite, not the original.** Every done-criterion gets its check run and its output looked at; the report lists each criterion with evidence, each conflict with its resolution, each assumption restated.
+
+### The strip-list, with sources
+
+| If your prompt says | What a current Claude model does with it | Replaced by | Source |
+|---|---|---|---|
+| "only report critical issues", "be conservative", "don't nitpick" | Finds the bugs, then withholds the ones below your bar. Recall drops. | Report every issue with a confidence and a severity; filter afterwards. | Prompting Claude Sonnet 5 and Opus 5, code review |
+| "double-check your work", "add a final verification step", "use a subagent to verify" | On Opus 5, verifies work it already verifies. More tokens, same quality. | Removed. | Prompting Claude Opus 5, "Task scope and over-verification" |
+| A numbered step-by-step recipe | Follows the recipe instead of reasoning about the goal. | Goal plus constraints. | Prompting Claude Fable 5, "Refactor existing prompts and skills" |
+| "show your reasoning", "explain your thinking in the answer" | On Fable, can trigger a refusal category. | Ask for the conclusion and its evidence. | Prompting Claude Fable 5, scaffolding notes |
+| "think step by step", "you are a senior engineer", ALL CAPS emphasis | Nothing. Adaptive thinking already decides how much to think. | Dropped, so the real instructions stand out. | Effort and thinking documentation |
+
+### Example, from an actual run
+
+The prompt was `Review lib/orders.js. Only report critical issues.` The skill investigated the file and the README, then printed:
+
+```text
+Original: Review lib/orders.js. Only report critical issues.
+
+Rewritten prompt:
+Goal: Review lib/orders.js, the order helpers behind the checkout service, so
+  defects are found before they reach money handling.                    (R1)
+Done when: every exported function has been read against the README's data
+  contract, and each defect is listed with a failure scenario, a severity and
+  a confidence.                                                           (R2)
+Scope: all 12 exports plus module-level state. Out of scope: style, naming. (R3)
+Mode: assessment, no code changes.                                        (R4)
+Context: @lib/orders.js, @README.md. No tests exist in the repo.          (R5)
+Deliverable: findings most-severe first, each with file:line and a repro. (R7)
+Assumptions: 1. Discount codes can come from user input.                  (R9)
+
+Changes:
+- Dropped "only report critical issues": on current Claude models a severity
+  filter is followed literally and suppresses real bugs. Replaced with
+  "report everything with severity and confidence, filter afterwards". (R8)
+- Added the reason, the scope, and that this is an assessment. (R1, R3, R4)
+```
+
+Then it reviewed the file and found all eleven planted bugs. The unassisted run on the same model found ten and put six of them in a paragraph labelled "not detailing per your critical-only scope". The unassisted run on Sonnet found two.
+
+### When not to use it
+
+A request that already is a brief. A one-line edit. A question. Rewriting a prompt that is already good wastes the tokens the skill exists to save, and the skill says so in its own first step.
+
+## sonnet-lean: how it works
+
+The skill applies whenever work runs on Sonnet 5: a subagent you spawn, a Workflow stage, a pipeline that calls a `claude-sonnet-*` model, or Sonnet as your session model. Seven levers, in the order they pay.
+
+1. **Route by difficulty, not habit.** Mechanical bulk goes to Haiku. Scoped reasoning goes to Sonnet. Only synthesis that a cheaper tier cannot verifiably do goes to Opus or Fable. Measured: Sonnet at `low` effort matched Opus 5 and Fable 5.1 on a four-module coding task, 13 of 13 hidden tests each, at $0.34 per run against $1.06 and $1.76.
+2. **Batch items per worker.** Every spawn carries about 45,000 tokens of fixed input. One worker outlining three files used 69,361 tokens; three workers outlining one file each used 140,707, with identical coverage. Fan out only when you need the items in parallel, and then keep every worker's configuration identical so they share the cached prompt prefix.
+3. **One complete brief, one turn.** Task and reason, exact deliverable shape, the context as file paths and line ranges, what is out of scope. Sonnet follows instructions literally, especially at lower effort, so "every section, not just the first" has to be written down. A second message to fix an under-specified first one costs more than the first one saved.
+4. **Constrain the output.** A structured schema where the harness supports it; otherwise the documented verbosity steer and a rule that the worker's final message is the return value, raw data only. Measured three times on three files: payloads down 62 to 80 percent, wall time roughly halved, coverage identical.
+5. **Set effort deliberately, and know what it buys.** Anthropic's mapping says Sonnet 5 at `medium` matches Sonnet 4.6 at `high`. Measured on a task that made Sonnet think: quality held at `low`, `medium` and `high`; time halved from `high` to `low`; cost was flat, because inside Claude Code the fixed input dominates. Effort is a latency lever in Claude Code and a cost lever on the raw API.
+6. **Thinking and API parameters.** Adaptive thinking stays on; lower effort rather than disabling it, because with thinking off Sonnet reaches for tools less. `max_tokens` is the hard cost ceiling. Sampling parameters return an error on Sonnet 5 and are removed. Subagent cache TTL is a cost lever on API billing.
+7. **Two briefing templates**, one per item and one batched, that a worker can execute without a second message.
+
+### When not to lean
+
+Tasks whose failure you cannot cheaply detect, verification passes that guard a decision, and anything you would have to re-run on a stronger setting. The cheapest run is the one that is correct the first time.
+
+## Which skill on which model
+
+| Model | prompt-master | sonnet-lean | Notes from the measurements |
+|---|---|---|---|
+| **Sonnet 5** | Yes, and this is where it pays most. Sonnet follows a severity filter literally: 2–4 of 11 bugs unassisted, 9–10 with the rewrite, same cost. | Yes, always; it is the skill's target model. | The cheapest model that passed every hidden test in this repository. Start here for well-specified work and escalate on evidence. |
+| **Opus 5** | Only for vague requests and for the assessment-or-change and source-of-truth rules. Not as a cost saver: on a complete brief carrying "double-check everything" it removed the instruction in one run of two and saved nothing either way. Review gains were small (10 to 11 of 11) at double the cost. | Yes, whenever Opus delegates to Sonnet workers. | Verifies its own work unprompted; extra verification instructions cost tokens for nothing (measured: +39%). The fix is to not write them, which no skill does as reliably as you can. |
+| **Fable 5.1** | Yes, chiefly for R1 (the reason), R4 (assessment or change) and stripping show-your-reasoning, which can trigger a refusal on Fable. Not benchmarked as the session model beyond a baseline. | Yes, whenever Fable delegates to Sonnet workers; Fable is the model most often orchestrating. | On the tasks here Fable scored the same as Sonnet at `low` and cost five times more. Reserve it for work where Opus at higher effort still falls short, as Anthropic's own model page says. |
+| **Opus 4.8** | Untested. Same literal-following profile as Opus 5, so the strip-list should apply. | Yes, as an orchestrator of Sonnet workers. | Legacy model. Scored the same as Opus 5 on the ledger task. |
+| **Haiku 4.5** | Not tested as a session model. | Sonnet-lean's routing rule sends mechanical bulk here. | Cheapest tier; no effort parameter. |
 
 ## Installation
 
-Clone and copy the skill folders into your Claude Code skills directory:
-
 ```bash
 git clone https://github.com/henriquetell/claude-skills.git
-cp -R claude-skills/fable-mode claude-skills/sonnet-lean ~/.claude/skills/
+cp -R claude-skills/prompt-master claude-skills/sonnet-lean ~/.claude/skills/
 ```
 
-Per-project installation works too — use `.claude/skills/` inside a repository instead of `~/.claude/skills/`.
-
-Each folder name must match the `name:` field in its `SKILL.md` frontmatter (they already do).
+Per-project installation works too: use `.claude/skills/` inside a repository. Each folder name matches the `name:` in its `SKILL.md`. Run `/skill-doctor` (Claude Code 2.1.261 or later) after a few sessions to see what each skill costs in context and whether it is being used.
 
 ## Usage
 
-Both skills auto-trigger when their `description` matches the task, or can be invoked explicitly:
-
-```
-/fable-mode   # then give it a substantial task
-/sonnet-lean  # when setting up Sonnet-bound delegation or pipelines
-```
-
-Typical `fable-mode` session: give the full task specification in one message (goal, constraints, what "done" looks like, and why you need it). The skill batches any clarifying questions into a single round, then runs autonomously — delegating fan-out work in parallel, verifying each step against a check that can actually fail, and reporting only claims backed by tool-result evidence.
-
-Typical `sonnet-lean` win: a Workflow/Agent stage that ran Sonnet at default settings gets rerouted as `{model: 'sonnet', effort: 'medium'}` with a complete one-turn brief and a structured output schema — same result quality tier, meaningfully fewer tokens both in and out.
-
-Neither skill applies itself to trivial work. Running the full protocol on a one-line fix costs more than it buys, and both skills say so in their trigger descriptions.
-
-## Is it tested? An honest A/B example
-
-Partially — and in the spirit of these skills' own rules (only claim what you can point to evidence for), here is exactly what has and hasn't been verified.
-
-**Verified:** both skills load and register correctly in Claude Code; every rule traces to an Anthropic doc that was fetched at authoring time (see `fable-mode/reference.md`); and the briefing rules were A/B tested once, as follows.
-
-**The experiment (2026-07-09, Claude Code, one run per arm — a demo, not a benchmark):** two Sonnet subagents were given the *identical* task — read `fable-mode/SKILL.md` and describe its section structure — differing only in the brief.
-
-*Arm A, naive brief (how most people delegate):*
+Both skills auto-trigger when their description matches the task. Explicitly:
 
 ```text
-Read the file ".../fable-mode/SKILL.md" and analyze its structure.
-Tell me about the sections it contains and what each one covers.
+/prompt-master fix the login bug          # rewrite, show, then do
+/prompt-master --only review this file    # rewrite and show, don't execute
+/sonnet-lean                              # when setting up Sonnet delegation or a pipeline
 ```
 
-*Arm B, sonnet-lean briefing template:*
+They compose. A typical flow: a vague request comes in, `prompt-master` turns it into a brief, and when the work fans out to Sonnet workers the brief becomes the worker prompt through `sonnet-lean`'s template.
 
-```text
-Task: Outline the structure of one skill file so it can be indexed.
-Deliverable: A numbered plain-text list, one line per top-level section:
-"N. <section title> — <one-line summary, max 15 words>". Your final message
-is the return value: the list only, no preamble, no recap, no commentary.
-Context: Read ".../fable-mode/SKILL.md" (the whole file).
-Scope: All top-level "##" sections, not just the first few. Do not evaluate
-or critique the content.
-Provide concise, focused responses. Skip non-essential context, and keep
-examples minimal.
-```
+## The measurements
 
-**Measured results:**
+Everything below was produced by [`bench/`](bench/): fixtures with a precise spec, deliberately wrong starting code, hidden tests validated against a reference solution, headless `claude -p` runs with the skill under test appended to the system prompt and the `Skill` tool disallowed so an installed copy cannot leak into a baseline arm. Two runs per cell unless stated. Two runs show a consistent gap; they do not estimate it precisely. Run your own before quoting a percentage.
 
-| Metric | A: naive | B: lean | Delta |
+### sonnet-lean
+
+**The briefing template, three runs on three files.** Two Sonnet subagents, identical task (outline one file's top-level sections), differing only in the brief: a naive "read this file and tell me about its sections" against the skill's template.
+
+| Run | Target | Payload naive → lean | Wall time | Coverage | Total tokens |
+|---|---|---|---|---|---|
+| 2026-07-09 | 14-section skill file | 4,703 → 1,777 chars (−62%) | 21.9 → 10.1 s | 14/14 both | 23,540 / 23,647 |
+| 2026-08-05 | 9-section reference file | 4,988 → 989 chars (−80%) | 24.1 → 8.2 s | 9/9 both | 33,429 / 32,127 |
+| 2026-09-09 | 12-section reference file | 4,263 → 1,150 chars (−73%) | 21.2 → 8.5 s | 12/12 both | 53,060 / 52,241 |
+
+Total tokens barely move because the fixed input dominates a single call. What the brief cuts is the output, which is the expensive part and the part the parent re-reads on every later turn.
+
+**Batching.** One Sonnet worker outlining three files against three workers outlining one each: 69,361 tokens against 140,707, coverage 35/35 both, wall time 26 s against 12 s in parallel.
+
+**Effort on a mechanical task.** Headless Sonnet 5 on the outline task at `low`, `medium`, `high`: 0, 0 and 32 thinking tokens, cost $0.14 each, coverage 12/12 each. Nothing to save.
+
+**Effort on a task that thinks.** The four-module ledger task, 13 hidden tests, one visible test contradicting the spec:
+
+| | `low` | `medium` | `high` |
 |---|---|---|---|
-| Returned payload | 4,703 chars / 635 words | 1,777 chars / 271 words | **−62%** |
-| Wall time | 21.9 s | 10.1 s | **−54%** |
-| Coverage of the file's 14 `##` sections | 14/14 | 14/14 (verified vs. `grep -c '^## '`) | equal |
-| Total subagent tokens (input + output) | 23,540 | 23,647 | ≈ equal |
+| Hidden tests | 13/13, 13/13 | 13/13, 13/13 | 13/13, 13/13 |
+| Thinking tokens | 870 / 1,382 | 5,430 / 6,108 | 9,063 / 9,195 |
+| Mean cost | $0.34 | $0.32 | $0.38 |
+| Mean API time | 75 s | 106 s | 159 s |
 
-**Honest reading of those numbers.** The last row matters: per-call *total* tokens barely moved, because in a subagent call the fixed input (agent system prompt + the file both agents read) dominates. What the lean brief actually cut was the **output** — the expensive tokens (billed at a multiple of input) and the ones that compound: the orchestrator ingests the returned payload into its context and re-processes it on every subsequent turn of the parent session, so a 62% smaller return keeps paying for itself. The halved wall time is consistent with roughly proportionally fewer output tokens generated. And coverage was identical — the lean output lost nothing the task actually asked for; arm A's extra 2,900 characters were prose framing, a closing recap, and the file path restated back to the caller that already supplied it.
+On the same task Fable 5.1 scored 13/13 at $1.76 and Opus 5 at $1.06.
 
-**Replication (2026-08-05, one run per arm):** the same A/B design was re-run on a different target file (`fable-mode/reference.md`, 9 top-level sections) with the same naive-vs-template briefs, both arms on Sonnet:
+### prompt-master
 
-| Metric | A: naive | B: lean | Delta |
+**Round one, vague prompts.** "Tests are failing in this project. Get them passing." on the ledger task, and "The slug library doesn't really match the readme, fix it up." on the slug task. Raw prompt against raw prompt plus the skill (then named `spec-first`, rules R1, R2, R6, R9).
+
+| | Sonnet 5, ledger | Opus 5, ledger | Sonnet 5, slug |
 |---|---|---|---|
-| Returned payload | 4,988 chars / 616 words | 989 chars / 128 words | **−80%** |
-| Wall time | 24.1 s | 8.2 s | **−66%** |
-| Coverage of the file's 9 `##` sections | 9/9 | 9/9 (verified vs. `grep -n '^## '`) | equal |
-| Total subagent tokens (input + output) | 33,429 | 32,127 | ≈ equal |
+| Hidden tests, raw / with skill | 13/13 both / 13/13 both | 13/13 both / 13/13 both | 17/17 both / 17/17 both |
+| Rewrote the contradicting test to pass, raw | 2/2 | 2/2 | — |
+| Rewrote it, with skill | 0/2 | 0/2 | — |
+| Mean cost raw → with skill | $0.40 → $0.42 | $0.71 → $0.85 | $0.25 → $0.29 |
 
-Same shape as the first run — total tokens flat (fixed input dominates), output payload and wall time cut hard, coverage identical. Arm A's extra ~4,000 characters were framing, per-section line numbers nobody asked for, and a closing structural essay; arm B returned exactly the nine lines the template demanded. Two runs on two files is still a demonstration, not a benchmark — but the mechanism reproduced.
+Correctness identical. The one consistent difference: told to get tests passing, every unassisted run changed the test's expectation to match the spec, disclosed in the report; every skill run left the test failing, followed the spec, and put the conflict in front of the reader. Whether you want that is a judgment call; the skill's position is that a test is the user's artifact.
 
-**Not verified (and stated in the skill itself):** the effort down-mapping — the *biggest* documented lever — couldn't be measured here because this harness's interactive Agent tool exposes `model` but not `effort`; that claim rests on Anthropic's published Sonnet 5 ↔ Sonnet 4.6 equivalence, not on our measurement. This was also a single small task with one run per arm — enough to demonstrate the mechanism, not to promise a percentage. Treat the numbers as an existence proof; run your own eval before quoting savings.
+**Round two, the code-review trap.** `bench/fixtures/review/lib/orders.js`, 84 lines, 11 planted bugs: an `eval` on user input, a pagination off-by-one, float money math, a missing `await`, a swallowed error, a shallow clone, a timezone bug, an in-place sort, an unbounded cache, dead code, an over-strict email regex. Prompt: "Review lib/orders.js. Only report critical issues."
+
+| | Sonnet 5, raw | Sonnet 5, with skill | Opus 5, raw | Opus 5, with skill |
+|---|---|---|---|---|
+| Planted bugs mentioned | 2/11, 4/11 | 9/11, 10/11 | 10/11, 10/11 | 11/11, 11/11 |
+| Mean cost | $0.11 | $0.11 | $0.15 | $0.34 |
+| Mean API time | 25 s | 45 s | 25 s | 72 s |
+
+On Sonnet this is the first clear correctness win for any skill in this repository. On Opus the effect is small because Opus already hedges around the filter, and the skill doubled the cost of a short review. Every skill run printed the original, the rewrite, and a reason per change.
+
+**Round three, the over-verification trap on Opus 5. A negative result.** Anthropic's Opus 5 page says instructions like "double-check your work" and "include a final verification step" cause over-verification: more tokens, no quality gain. The precise ledger prompt was rerun with exactly those phrases added. Reference point: the same prompt without them, from the fable-mode benchmark, cost $1.06 per run.
+
+| Opus 5, ledger, 13 hidden tests | Plain prompt (reference) | With "double-check" added, raw | With "double-check" added, prompt-master |
+|---|---|---|---|
+| Hidden tests | 13/13, 13/13 | 13/13, 13/13 | 13/13, 13/13 |
+| Mean cost | $1.06 | $1.47 | $1.52 |
+| Mean API time | 222 s | 288 s | 288 s |
+| Thinking tokens | 4,780 / 6,626 | 8,790 / 8,994 | 4,383 / 4,579 |
+| Rewrite shown, instruction removed | — | — | 1 of 2 runs |
+
+**Honest reading.** The trap is real: the two added sentences raised Opus 5's cost by about 39 percent and its time by 30 percent for an identical result, which is what the documentation predicts. The skill did not fix it. In a first attempt it never rewrote the prompt at all, because the request was already a complete brief and the skill's first step said to leave complete briefs alone; that rule was corrected so that a strip-list match always produces a rewrite, and the prompt-master arm was rerun. After the fix, one run of two showed the rewrite and removed the instruction with the right citation; the other still skipped it. And the run that did remove it cost the same as the raw runs anyway: thinking tokens halved, but the model then wrote a 102-assertion scratch suite "which is checkable where double-check isn't", replacing vague verification with heavier concrete verification. Two conclusions. First, on a complete brief on Opus 5, prompt-master is not a cost saver, and the skill's own rule R2 (checkable done-criteria) is part of why. Second, the skill's trigger on already-complete prompts is unreliable and remains a known defect. Both are stated in the skill.
+
+**Not measured.** The interactive question round (R9) and the mechanics check; the skill on Opus 4.8 or Fable as the session model; the return-by-file rule in sonnet-lean; and where `low` effort starts to lose to `high`, since every task here sat at the ceiling for every model.
+
+### Retired: fable-mode
+
+`fable-mode` tried to make Opus 4.8 and Opus 5 work with Claude Fable's documented operating discipline: spec-first autonomy, fresh-context verifier subagents, grounded progress claims, a failable-check standard, file-based state. Every rule cited an Anthropic page. On 2026-09-09 it was benchmarked with the decision fixed in advance: it stays if it wins on correctness or on honesty about a deliberately wrong test.
+
+Sixteen runs over four tasks and two models: identical correctness, scope and honesty with and without it, and 37 to 64 percent more cost with it. Fable 5.1 itself, run on the same ledger task with no skill, scored the same 13/13 as Opus alone and as Sonnet at `low`, at $1.76 against $1.06 and $0.34. The reason the skill bought nothing is that Claude Code's own system prompt already installs that discipline on current models, and Anthropic's Opus 5 guidance says added verification instructions cause over-verification. It lives in [`archive/`](archive/) with its `reference.md`, a dated, source-linked snapshot of Anthropic's guidance for Fable 5.1, Opus 5 and Opus 4.8 that stays useful on its own. Its one durable idea, "make the first turn complete", became `prompt-master`.
 
 ## Design principles
 
-1. **Every rule cites a source.** `fable-mode/reference.md` preserves the verbatim Anthropic snippets and URLs each rule was derived from, so the skill can be re-derived or re-tuned when the docs change. `sonnet-lean` lists its sources inline. Sources were last re-verified against the live docs on 2026-08-05; claims that have since disappeared from the docs are marked as historical in `reference.md` rather than silently kept.
-2. **Checks must be able to fail.** Verification names an external artifact — a test command that ran, a file that provably exists, a source fetched in this run, a diff against spec. "I reviewed it and it looks right" doesn't count.
-3. **Honest about limits.** A skill shapes procedure, not capability. Neither skill claims to make a model smarter — only to stop it from leaving documented performance or savings on the table.
+1. **Every rule cites a source.** Each skill lists the Anthropic page and section each rule comes from, with the date it was last re-verified against the live docs and the Claude Code changelog (2026-09-09, through Claude Code 2.1.266).
+2. **Every claim of benefit is measured against a check that can fail.** Hidden tests validated against a reference solution, coverage against `grep`, cost and time from the harness's own JSON. "It felt better" is not a result. The apparatus is in `bench/`.
+3. **A skill that doesn't beat the baseline is retired, in public.** A skill that does beat it says exactly where: prompt-master's win is on Sonnet, on prompts with a severity filter, and it is stated that way.
+4. **Skills cost context.** `/skill-doctor` shows what each one costs and whether it is used. Keep only what earns its place.
 
 ## Repository layout
 
 ```
-fable-mode/
-  SKILL.md       # the operating protocol (sections 0–12)
-  reference.md   # verbatim Anthropic source snippets + provenance of every rule
+prompt-master/
+  SKILL.md              # the request-to-prompt rewriter: rules R1–R9, strip-list, sources, measurements
 sonnet-lean/
-  SKILL.md       # the token-efficiency levers, with briefing template
+  SKILL.md              # the token-efficiency levers, batching rule, briefing templates, sources
+bench/
+  README.md             # how to rerun every number in this file
+  fixtures/ hidden/ reference/ prompts/   # four tasks, hidden tests, known-good solutions, prompts
+  validate.sh run.sh grade.js grade-review.js
+archive/
+  README.md
+  fable-mode/           # retired protocol and its source-linked reference library
 README.md
 LICENSE
 ```
 
 ## Sources & credits
 
-Built on Anthropic's official documentation:
+Built on Anthropic's official documentation: [Prompting Claude Sonnet 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5), [Prompting Claude Opus 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5), [Prompting Claude Fable 5.1](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1), [Prompting Claude Fable 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5), [Claude prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices), [Effort](https://platform.claude.com/docs/en/build-with-claude/effort), the [Claude Code CHANGELOG](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md) and the Claude Code docs on [subagents](https://code.claude.com/docs/en/sub-agents), [prompt caching](https://code.claude.com/docs/en/prompt-caching) and [output styles](https://code.claude.com/docs/en/output-styles).
 
-- [Prompting Claude Fable 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5)
-- [Prompting Claude Opus 4.8](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-4-8)
-- [Prompting Claude Opus 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5)
-- [Prompting Claude Sonnet 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5)
-- [Claude prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
-- [Migration guide](https://platform.claude.com/docs/en/about-claude/models/migration-guide)
-
-Several verification ideas in `fable-mode` (the failable-check standard, domain check anchors, replan budget, verify-before-flag) were adopted from [mrtooher/fable-mode](https://github.com/mrtooher/fable-mode) — a community skill with a different architecture but a genuinely sharp verification standard. `fable-mode/reference.md` documents exactly what was adopted, what was rejected, and why.
+Several verification ideas in the retired `fable-mode` (the failable-check standard, domain check anchors, verify-before-flag) were adopted from [mrtooher/fable-mode](https://github.com/mrtooher/fable-mode); `archive/fable-mode/reference.md` documents what was adopted and why. The failable-check standard outlived the skill: it is the rule every benchmark here was run under.
 
 ## License
 

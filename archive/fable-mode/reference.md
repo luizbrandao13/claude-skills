@@ -1,6 +1,6 @@
 # Fable Mode — Sources & Verbatim Snippet Library
 
-Compiled 2026-07-08 from Anthropic's official documentation; re-verified against the live docs 2026-08-05 (see "Re-verification 2026-08-05" below). SKILL.md adapts these; this file preserves the originals word-for-word so the protocol can be re-derived or re-tuned when the docs change.
+Compiled 2026-07-08 from Anthropic's official documentation; re-verified against the live docs 2026-08-05, and again on 2026-09-09 when the protocol was extended for Claude Fable 5.1 and the Claude Code harness changes in releases 2.1.223–2.1.266 (see the two "Re-verification" sections below). SKILL.md adapts these; this file preserves the originals word-for-word so the protocol can be re-derived or re-tuned when the docs change.
 
 ## Sources
 
@@ -13,6 +13,10 @@ Compiled 2026-07-08 from Anthropic's official documentation; re-verified against
 7. **Prompting Claude Sonnet 5** — https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5 (basis for the companion `sonnet-lean` skill; effort mapping, verbosity, tokenizer)
 8. **mrtooher/fable-mode** — https://github.com/mrtooher/fable-mode (community skill, unsourced; ideas adopted 2026-07-09 listed below)
 9. **Prompting Claude Opus 5** — https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5 (added 2026-08-05; basis for the Opus 5 column of SKILL.md's Model calibration table)
+10. **Prompting Claude Fable 5.1** — https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-1 (added 2026-09-09; the Fable 5.1 snippets below — updated autonomy block, scope-and-tests block, batching nudge, progress-update snippet, low-effort search trigger)
+11. **Migrating to Claude Fable 5.1** — https://platform.claude.com/docs/en/models/fable-5-1/migration-guide and model page https://platform.claude.com/docs/en/models/fable-5-1/overview (added 2026-09-09; release date, pricing, thinking always-on, per-message effort)
+12. **Claude Code CHANGELOG** — https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md (added 2026-09-09; releases 2.1.223–2.1.266 read in full; provenance of every harness rule in SKILL.md, listed with version numbers below)
+13. **Claude Code docs** — sub-agents https://code.claude.com/docs/en/sub-agents, advisor https://code.claude.com/docs/en/advisor, prompt caching https://code.claude.com/docs/en/prompt-caching, model config https://code.claude.com/docs/en/model-config, output styles https://code.claude.com/docs/en/output-styles, goal https://code.claude.com/docs/en/goal (added 2026-09-09; used to confirm each changelog entry's current behavior)
 
 ## Re-verification 2026-08-05
 
@@ -23,6 +27,72 @@ All sources re-fetched and diffed against this file. Findings:
 - **Claude Opus 5 released** (`claude-opus-5`, $5/$25 per MTok, 1M context, 128K output, knowledge cutoff May 2026). Opus 4.8 moved to the Legacy models table; Opus 4.1 retires 2026-08-05. Opus 5 reverses several 4.8 defaults — profile below; SKILL.md gained a Model calibration table from it.
 - **Benchmark figures removed from platform docs:** the SWE-bench Pro and FrontierCode Diamond numbers in "The capability gap" below no longer appear anywhere in current platform docs; treat them as historical (launch-announcement era), not currently citable.
 - **Best-practices page (source 3): all adopted snippets unchanged.** New caveat attached to the self-check anchor: "Claude Opus 5 is the exception: it verifies its own work well without explicit instruction, and verification instructions carried over from prompts tuned for earlier models can cause over-verification… When migrating to Claude Opus 5, remove these instructions rather than rewriting them."
+
+## Re-verification 2026-09-09
+
+Triggered by a read of the Claude Code changelog from 2.1.223 (the release after the 2026-08-05 pass) through 2.1.266. All sources re-fetched. Findings:
+
+- **Claude Fable 5.1 released 2026-09-01** (`claude-fable-5-1`; default Fable in Claude Code since 2.1.257). Same $10/$50 per MTok as Fable 5, cache reads $0.25/MTok (a quarter of Fable 5's rate), 1M context, 128K output, knowledge cutoff June 2026, adaptive thinking **always on** (`disabled` returns a 400 at any effort). Fable 5 moved to the legacy models table. Anthropic's new prompting page (source 10) says existing Fable 5 prompts "should perform well on Claude Fable 5.1 without changes" and documents a handful of behavioral differences — profile below. SKILL.md was re-pointed from Fable 5 to Fable 5.1 and gained the new snippets.
+- **Fable 5 page (source 1): every adopted snippet unchanged verbatim.** The Fable 5 snippets below therefore remain valid for 5.1; where the 5.1 page supersedes one (autonomy block, checkpoint behavior), the 5.1 version is recorded in the new profile and SKILL.md uses it.
+- **Opus 5 page (source 9): unchanged.** Delegation, self-verification, effort, thinking-disabled artifacts, verbosity, code-review literalism all as recorded. One detail adopted into the calibration table this pass: the page names Claude Code's deterministic caps, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` and `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`.
+- **Opus 4.8 page (source 2): unchanged;** still in the legacy table, still the model whose defaults §2–§4 push against.
+- **Best-practices page (source 3): all nine adopted snippets present verbatim** (investigate-before-answering, parallel tool calls, reversibility, context-limit persistence, commit-and-decide, subagent-overuse steering, self-check anchor with its Opus 5 exception, temp-file cleanup, long-context placement). The page now lists Fable 5.1 among current models.
+- **Sonnet 5 page (source 7): unchanged;** Sonnet 5's $2/$10 per MTok is now its standard list price (Claude Code 2.1.24x dropped the "limited-time promo" label).
+- **Benchmark figures:** still absent from platform docs; the historical marking from 2026-08-05 stands.
+- **Claude Code harness:** 44 releases read. The changes that alter what SKILL.md's rules should say are listed with version numbers in "Claude Code harness changes" below; the rest (UI, gateways, permissions plumbing, Remote Control, VS Code) don't touch working discipline.
+
+## Fable 5.1 behavioral profile (source 10 + 11, added 2026-09-09)
+
+What the 5.1 page documents as different from Fable 5, and what SKILL.md did with each:
+
+- **Effort:** "Start at the default effort level, `high`, then test the other levels … Re-run the sweep even if you already ran one on Claude Fable 5: effort level names don't correspond to the same amount of thinking across models." "At `medium`, results roughly match Claude Fable 5 at lower cost … At `low`, Claude Fable 5.1 is often competitive with Claude Opus and Claude Sonnet models on cost per task while scoring higher." Per-message effort changes (beta) preserve the prompt cache on 5.1; on other models a top-level change restarts it → §0 "pick the level at session start".
+- **Fewer progress updates:** "Claude Fable 5.1's default behavior is to write fewer user-facing updates during long tool-calling turns than Claude Fable 5 does." Snippet:
+  > Before you start, say in a line what you're about to do; brief updates while you work help the user follow along. Close with a short recap that stands on its own — what you found, what you did, and what's next — so a reader who only sees the last message has the full picture.
+
+  And for harnesses that hide tool output (→ §11):
+  > Only you see that command's output — the user's terminal shows at most a few lines of it. If the user needs to read any of it, put it in your reply.
+- **One tool call per turn in agent loops** (coding and computer-use loops where the next reads are implied, not requested). Nudge (→ §2):
+  > First privately list what you need next; then request every item that doesn't depend on another's result in this one response.
+- **Finish the whole task** — the updated autonomy block (supersedes the Fable 5 "autonomous-pipeline reminder" below; → §8, §10):
+  > You are operating autonomously. The user is not watching in real time and cannot answer questions mid-task, so asking 'Want me to…?' or 'Shall I…?' will block the work. For reversible actions that follow from the original request, proceed without asking. Stop only for destructive actions or genuine scope changes the user must decide. Offering follow-ups after the task is done is fine; asking permission before doing the work is not.
+  >
+  > Exception: when the user is describing a problem, asking a question, or thinking out loud rather than requesting a change, the deliverable is your assessment. Report your findings and stop. Don't apply a fix until they ask for one.
+  >
+  > Before ending your turn, check your last paragraph. If it is a plan, an analysis, a question, a list of next steps, or a promise about work you have not done ('I'll…', 'let me know when…'), do that work now with tool calls. That includes retrying after errors and gathering missing information yourself. Do not stop because the context or session is long. End your turn only when the task is complete or you are blocked on input only the user can provide.
+  >
+  > Before running a command that changes system state (such as restarts, deletes, or config edits), check that the evidence actually supports that specific action. A signal that pattern-matches to a known failure may have a different cause.
+
+  Paired "Delivering work" block (→ §1, §8, §9): "The user's request — or the plan they approved — sets the scope, and the scope is the deliverable: don't quietly narrow, widen, or swap it. … If a question comes up partway, first do everything that doesn't depend on the answer; then state the assumption you made, or — when going ahead on a wrong guess would be unsafe or would make the work useless — put the question at the end of a turn that also delivers that progress. If one part turns out to be blocked, complete every other part in full and say exactly what you left out and why … A step you have decided on is something to run, not to announce."
+- **Keep changes and tests to what the task asks for** ("unrequested additions and committed test code drop substantially with no measurable change in task success"; → §9):
+  > If, while working or testing, you find a pre-existing bug, a performance concern, or behavior the task doesn't mention, don't fix, optimize or extend it in this change unless the requested behavior cannot work without it; report it as a follow-up in your summary. Where the task is ambiguous, implement the reading its wording and the surrounding code most directly support, state that assumption in your summary, and don't build for the other readings as well. Verify your work however you like; scratch scripts and quick checks need not be kept. Commit tests only where the task asks for them or this repository already keeps tests for this kind of change, sized like the neighboring test files — roughly one focused test per stated behavior — and don't turn scratch checks into additional permanent test files. This is about extras only: implement every behavior the task asks for, completely.
+- **Search triggering at low effort** ("At `low` effort, Claude Fable 5.1 is less likely than Claude Fable 5 to call a search or retrieval tool"; → §2):
+  > When a query centers on a name you do not confidently recognize, or recognize from a fast-moving area like AI models and developer tools where the landscape shifts within months, the name itself is the thing to verify: search before answering, and include the name as the user wrote it in at least one query alongside any reformulations. This holds even when you have some background on it — partial background is exactly what makes an out-of-date answer sound authoritative, so familiarity is not a reason to skip the search.
+- **Prefer targeted edits over whole-file rewrites** (→ §9): "when it will not affect the end result, try to surgically edit a file rather than rewrite the entire thing."
+- **Let the lead agent keep working while subagents run** (→ §3): "On coding tasks, letting the lead continue while subagents run lowers average time to completion at similar quality, token usage, and cost. … The model still often chooses to wait."
+- **Long outputs at `xhigh`/`max`:** the model may draft a long deliverable in thinking and again in the reply; run such requests at `high` unless a gain is measured (→ §0 effort guidance unchanged).
+- **Writing density / formatting in chat:** denser prose than Fable 5, less bold and fewer headers. Not adopted — the target models have the opposite tendency and §11 already covers readability.
+- **Not adopted, API-integration only:** append-only history and thinking-block binding, `thinking.display: "updates"`, turn-scoped system messages, compaction-summary instruction, safeguard false positives, vision crop tools.
+
+## Claude Code harness changes 2.1.223–2.1.266 (source 12 + 13, added 2026-09-09)
+
+Each SKILL.md rule that describes the harness rather than the model rests on one of these. Versions are the release that introduced or last changed the behavior.
+
+- **2.1.224** — the 200-subagent-per-session cap was removed (concurrency and depth limits still apply); the Bash tool description now says command output is displayed to the model, not reliably to the user (→ §11).
+- **2.1.228** — the Write tool lets newer models overwrite an existing file they haven't read this session (→ §2).
+- **2.1.229** — workflow fan-outs stagger same-prefix sibling agents so they read the first agent's cached prefix.
+- **2.1.232** — subagent forking on by default: `subagent_type: "fork"` inherits the full conversation and prompt cache; non-teammate spawns in interactive sessions run in the background by default (→ §3, §4). Fable offered as an advisor again.
+- **2.1.233** — Todo/task-tracking tools (TaskCreate/Get/Update/List, TodoWrite) no longer available on Opus 4.8, Sonnet 5, Fable 5, Mythos 5 and newer; `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` restores them (→ §7).
+- **2.1.234** — sessions continue automatically when a claude.ai usage limit resets; `/goal` check-ins on long-running background work (→ §7).
+- **2.1.237** — built-in **Concise** output style: "Claude leads with the result, skips preamble and narration, and keeps responses short by default, while doing the engineering work as thoroughly as in the Default style." Output styles shape the main conversation only; subagents run their own system prompt, forks excepted (→ calibration table, §11).
+- **2.1.243** — subagent frontmatter supports `effort`; `/tasks` and agent detail show the model and effort each subagent ran on; `promptCacheTtl` / `subagentPromptCacheTtl` settings (→ §3).
+- **2.1.246** — a subagent that stops at `maxTurns` returns its output marked partial with a hint to continue via `SendMessage`; non-interactive sessions auto-continue responses cut off mid-stream (→ §3, §7).
+- **2.1.248** — `experimental.cacheTtl` in agent frontmatter; Workflow script reference moved into the bundled `workflow-authoring` skill.
+- **2.1.251** — `CLAUDE_CODE_SUBAGENT_MODEL` became a default rather than an override (per-spawn and frontmatter `model` now win); Opus 5 with thinking off and effort `xhigh`/`max` sends `high` instead of failing; `/effort` saves the level per model; `/cost` gained a prompt-cache line (→ §0, calibration table).
+- **2.1.255 / 2.1.257** — Fable 5.1 accepted as advisor (2.1.255); Fable 5.1 default Fable model, `s` in `/effort` for session-only, `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` applies one model to every subagent and ignores per-spawn picks (→ §0, §3).
+- **2.1.259** — `--permission-prompts none` for unattended headless hosts: anything that would prompt is denied automatically (→ §8).
+- **2.1.260** — auto-compact for 1M-context Opus and Fable sessions shortly before the limit; `/effort` on Fable 5.1 no longer invalidates the prompt cache (other models still do); `/cost` names the likely cause of a cache miss; background commands started by subagents no longer time out after an hour (→ §0, §7).
+- **2.1.261** — `/skill-doctor` shows which loaded skills go unused and what they cost in context.
+- **Advisor tool (source 13):** "The advisor tool lets Claude consult a second, typically stronger model at key moments during a task, such as before committing to an approach, when stuck on a recurring error, or before declaring a task complete. The advisor receives the full conversation, including every tool call and result, and returns guidance that Claude applies before continuing." Accepted advisors for an Opus 4.7-or-later main model: Fable, and Opus 4.7 or later. Anthropic API only; toggling keeps the main model's prompt cache; the advisor's own read of the transcript is not cached (→ §0).
 
 ## Opus 5 behavioral profile (source 9, added 2026-08-05)
 
@@ -39,7 +109,7 @@ What changed relative to the Opus 4.8 profile this skill was tuned against:
 
 - SWE-bench Pro: Fable 5 80.3% vs Opus 4.8 69.2%. FrontierCode Diamond: 29.3% vs 13.4%. The gap **widens with task complexity**. *(Historical: these figures were removed from platform docs by 2026-08-05 — see Re-verification above.)*
 - Fable: "state-of-the-art on nearly all tested benchmarks"; sustains multi-day goal-directed runs; first-shot correctness on complex well-specified problems; substantially better dense-image vision; higher bug-finding recall; better at navigating ambiguity; "significantly more dependable at dispatching and sustaining parallel subagents."
-- Pricing: Fable $10/$50 per MTok; Opus 4.8 $5/$25. Both 1M context / 128K output. (Batch API = 50% off ⇒ batched Fable costs Opus sticker price.)
+- Pricing: Fable 5.1 and Fable 5 $10/$50 per MTok; Opus 5 and Opus 4.8 $5/$25. All 1M context / 128K output. Fable 5.1 cache reads are $0.25/MTok, a quarter of Fable 5's and half of Opus 5's. (Batch API = 50% off ⇒ batched Fable costs Opus sticker price.)
 - No fine-tuning/distillation exists for any Claude model; Fable never returns raw chain of thought (summarized or omitted only), so there is no distillation signal.
 
 ## Opus 4.8 behavioral profile (what SKILL.md counteracts)
@@ -58,6 +128,8 @@ From source 2 and the migration guide:
 - Frontend house style: warm cream (~#F4F1EA), serif display, terracotta accent — persistent; break it by specifying a concrete alternative or proposing 3–4 directions first.
 
 ## Verbatim Fable 5 snippets (source 1)
+
+Still current for Fable 5.1 (re-verified 2026-09-09; the 5.1 page states Fable 5 prompts carry over unchanged). Where the 5.1 page publishes a newer version — the autonomy reminder and checkpoint behavior — the newer text is in the Fable 5.1 profile above and is the one SKILL.md uses.
 
 ### Anti-overplanning ("Longer turns by default")
 > When you have enough information to act, act. Do not re-derive facts already established in the conversation, re-litigate a decision the user has already made, or narrate options you will not pursue in user-facing messages. If you are weighing a choice, give a recommendation, not an exhaustive survey. This does not apply to thinking blocks.
