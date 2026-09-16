@@ -26,10 +26,10 @@ ID="$T-$L-$N"; D="$OUT/$ID"; mkdir -p "$OUT"; rm -rf "$D"; cp -R "$HERE/fixtures
 git init -q && git add -A && git -c user.email=bench@local -c user.name=bench commit -qm fixture
 EXTRA=(); [ -n "$EFFORT" ] && EXTRA+=(--effort "$EFFORT")
 if [ -n "$SKILL" ]; then
-  SKILL_CONTENT=$(cat "$SKILL"; printf x); SKILL_CONTENT=${SKILL_CONTENT%x}
+  SKILL_CONTENT=$(cat "$SKILL" && printf x); SKILL_CONTENT=${SKILL_CONTENT%x}
   EXTRA+=(--append-system-prompt "$SKILL_CONTENT")
 fi
-PROMPT_CONTENT=$(cat "$PROMPT"; printf x); PROMPT_CONTENT=${PROMPT_CONTENT%x}
+PROMPT_CONTENT=$(cat "$PROMPT" && printf x); PROMPT_CONTENT=${PROMPT_CONTENT%x}
 start=$(date +%s)
 # CLAUDECODE is unset so the run works from inside another Claude Code session. Skill is disallowed so an
 # installed copy of a skill cannot auto-trigger in the baseline arm.
