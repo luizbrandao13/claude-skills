@@ -35,7 +35,8 @@ bench/test-runner.sh
 
 The test substitutes a local fake `claude` executable and verifies that relative
 `--prompt`, `--skill`, and `--out` paths are resolved from the caller's working
-directory.
+directory. It also verifies that missing inputs and unknown options fail before
+Claude is invoked or an existing run directory is replaced.
 
 Runs are independent, so launch several in the background and grade when they finish. Each ledger run costs roughly $0.35 on Sonnet, $1.10 on Opus 5, $1.75 on Fable 5.1 at list price.
 
