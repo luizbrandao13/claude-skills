@@ -59,10 +59,23 @@ assert_not_invoked() {
   }
 }
 
+reset_capture() {
+  rm -f "$CAPTURE/prompt" "$CAPTURE/skill" "$CAPTURE/invoked"
+}
+
+assert_invoked() {
+  [ -e "$CAPTURE/invoked" ] || {
+    printf '%s\n' "fake claude was not invoked for successful runner case" >&2
+    exit 1
+  }
+}
+
+reset_capture
 run_runner ledger fake-model relative-paths 1 \
   --prompt prompt.txt \
   --skill skill.md \
   --out runs
+assert_invoked
 cmp "$CALLER/prompt.txt" "$CAPTURE/prompt"
 cmp "$CALLER/skill.md" "$CAPTURE/skill"
 test -f "$CALLER/runs/ledger-relative-paths-1.json"
@@ -81,7 +94,7 @@ assert_not_invoked
   printf '%s\n' "existing run was removed before missing prompt validation" >&2
   exit 1
 }
-grep -F "missing-prompt.txt" "$CAPTURE/missing-prompt.err"
+grep -Fq "missing-prompt.txt" "$CAPTURE/missing-prompt.err"
 
 if run_runner ledger fake-model missing-skill 1 \
   --prompt prompt.txt \
@@ -91,7 +104,7 @@ if run_runner ledger fake-model missing-skill 1 \
   exit 1
 fi
 assert_not_invoked
-grep -F "missing-skill.md" "$CAPTURE/missing-skill.err"
+grep -Fq "missing-skill.md" "$CAPTURE/missing-skill.err"
 
 if run_runner ledger fake-model unknown-option 1 \
   --unknown value > "$CAPTURE/unknown-option.err" 2>&1; then
@@ -99,18 +112,22 @@ if run_runner ledger fake-model unknown-option 1 \
   exit 1
 fi
 assert_not_invoked
-grep -F "unknown arg --unknown" "$CAPTURE/unknown-option.err"
+grep -Fq "unknown arg --unknown" "$CAPTURE/unknown-option.err"
 
+reset_capture
 run_runner ledger fake-model absolute-paths 1 \
   --prompt "$CALLER/prompt.txt" \
   --skill "$CALLER/skill.md" \
   --out "$CALLER/absolute runs"
+assert_invoked
 cmp "$CALLER/prompt.txt" "$CAPTURE/prompt"
 cmp "$CALLER/skill.md" "$CAPTURE/skill"
 test -f "$CALLER/absolute runs/ledger-absolute-paths-1.done"
 
+reset_capture
 run_runner ledger fake-model default-prompt 1 --out runs
+assert_invoked
 cmp "$DEFAULT_PROMPT" "$CAPTURE/prompt"
 test -f "$CALLER/runs/ledger-default-prompt-1.done"
 
-printf '%s\n' "runner relative paths: PASS"
+printf '%s\n' "benchmark runner offline test: PASS"
